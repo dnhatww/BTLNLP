@@ -1,0 +1,5 @@
+{
+  "replacements": {"ko": "không", "khum": "không", "hok": "không", "dc": "được", "đc": "được", "j": "gì", "mik": "mình", "mn": "mọi người"},
+  "ambiguous_keep": ["k", "bt", "vs"],
+  "toxic_keep": ["đéo", "đm", "vcl", "dm", "vl", "địt", "đụ"]
+}

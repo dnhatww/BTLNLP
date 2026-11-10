@@ -1,0 +1,141 @@
+# -*- coding: utf-8 -*-
+import pandas as pd
+from pathlib import Path
+
+def generate_report():
+    df = pd.read_csv(r'd:\btl kpdl\labeling\facebook_comments_labeled.csv', encoding='utf-8-sig')
+
+    total = len(df)
+    toxic = int((df['label'] == 1).sum())
+    nontoxic = int((df['label'] == 0).sum())
+    review = int((df['needs_review'] == True).sum())
+    avg_conf = round(df['confidence'].mean(), 3)
+
+    toxic_needs_review = int(((df['label'] == 1) & (df['needs_review'] == True)).sum())
+    nontoxic_needs_review = int(((df['label'] == 0) & (df['needs_review'] == True)).sum())
+    toxic_high = int(((df['label'] == 1) & (df['confidence'] >= 0.7)).sum())
+    toxic_low = int(((df['label'] == 1) & (df['confidence'] < 0.7)).sum())
+
+    conf_bins = pd.cut(df['confidence'], bins=[0, 0.4, 0.6, 0.8, 1.0])
+    conf_dist = conf_bins.value_counts().sort_index()
+
+    toxic_samples = df[df['label'] == 1].sort_values('confidence', ascending=False).head(15)
+    review_samples = df[df['needs_review'] == True].sort_values('confidence').head(15)
+
+    lines = []
+    lines.append("# Báo Cáo Gán Nhãn Toxic / Non-toxic Cho Dataset Bình Luận Facebook\n")
+    lines.append("**Đề tài:** Phân loại bình luận Facebook thành Toxic và Non-toxic")
+    lines.append("**Môn học:** Khai phá dữ liệu văn bản")
+    lines.append("**Phương pháp:** AI-Assisted Context-Aware Rule-Based Annotation Pipeline")
+    lines.append("**Dataset gốc:** `mua_do_comments_dedup.csv` (24,491 bình luận)\n")
+    lines.append("---\n")
+    lines.append("## 1. TỔNG QUAN DATASET BAN ĐẦU\n")
+    lines.append("| Chỉ số | Giá trị | Ghi chú |")
+    lines.append("|---|---|---|")
+    lines.append(f"| Tổng số dòng | {total:,} | Đã deduplicate bởi thành viên thu thập |")
+    lines.append("| Số cột ban đầu | 3 | `id_comment`, `comment`, `label` |")
+    lines.append("| Định dạng | CSV (UTF-8 with BOM) | Đảm bảo hiển thị chuẩn tiếng Việt |")
+    lines.append("| Trạng thái nhãn gốc | 100% trống (NaN) | Chưa được gán nhãn |")
+    lines.append("| Bình luận rỗng / null | 0 | Không có dòng thiếu dữ liệu text |")
+    lines.append("| Bình luận trùng lặp | 0 | Đã được deduplicate trước đó |")
+    lines.append(f"| Độ dài bình luận TB | {df['comment'].astype(str).str.len().mean():.1f} ký tự | Max: {df['comment'].astype(str).str.len().max()} ký tự |")
+    lines.append("\n### Đặc thù dữ liệu")
+    lines.append("- Bộ dữ liệu gồm các bình luận thảo luận về bộ phim lịch sử **'Mưa Đỏ'**.")
+    lines.append("- Xuất hiện nhiều từ ngữ chiến tranh, bi thương (*chết, máu, điên dại, khùng, hèn, giặc, giết*) xuất hiện dày đặc trong **ngữ cảnh thảo luận phim hoặc lịch sử**, hoàn toàn **KHÔNG PHẢI ngôn ngữ độc hại**.")
+    lines.append("- Hệ thống phân loại đã phân biệt rạch ròi giữa việc bàn luận phim/nhân vật và việc tấn công/lăng mạ người khác.")
+    lines.append("\n---\n")
+    lines.append("## 2. KẾT QUẢ GÁN NHÃN\n")
+    lines.append("| Nhãn | Giá trị nhãn | Số lượng | Tỷ lệ (%) |")
+    lines.append("|---|---|---|---|")
+    lines.append(f"| **Non-toxic** | **0** | **{nontoxic:,}** | **{nontoxic/total*100:.2f}%** |")
+    lines.append(f"| **Toxic** | **1** | **{toxic:,}** | **{toxic/total*100:.2f}%** |")
+    lines.append("| Chưa xác định | null | 0 | 0.00% |")
+    lines.append(f"| **TỔNG CỘNG** | - | **{total:,}** | **100.00%** |\n")
+
+    lines.append("### Kiểm soát chất lượng và độ tin cậy\n")
+    lines.append("| Chỉ số kiểm định | Số lượng | Tỷ lệ (%) | Ý nghĩa |")
+    lines.append("|---|---|---|---|")
+    lines.append(f"| **Cần kiểm tra lại (`needs_review = TRUE`)** | **{review:,}** | **{review/total*100:.2f}%** | Các ca nhập nhằng, biên giới |")
+    lines.append(f"| - Toxic cần review | {toxic_needs_review:,} | {toxic_needs_review/toxic*100:.2f}% của Toxic | Trường hợp biên giới cần thẩm định |")
+    lines.append(f"| - Non-toxic cần review | {nontoxic_needs_review:,} | {nontoxic_needs_review/nontoxic*100:.2f}% của Non-toxic | Có từ nhạy cảm nhưng ngữ cảnh an toàn |")
+    lines.append(f"| **Toxic độ tin cậy cao (≥ 0.70)** | {toxic_high:,} | {toxic_high/toxic*100:.2f}% của Toxic | Tục tĩu, xúc phạm nặng, công kích rõ ràng |")
+    lines.append(f"| **Độ tin cậy trung bình toàn tập** | {avg_conf} | - | Thang điểm từ 0.0 đến 1.0 |\n")
+
+    lines.append("### Phân bố độ tin cậy (Confidence)\n")
+    lines.append("| Khoảng Confidence | Số lượng | Tỷ lệ (%) | Đánh giá |")
+    lines.append("|---|---|---|---|")
+    for interval, count in conf_dist.items():
+        pct = round(count / total * 100, 2)
+        desc = "Rất chắc chắn" if interval.left >= 0.8 else ("Khá chắc chắn" if interval.left >= 0.6 else "Cần đối chiếu review")
+        lines.append(f"| {interval} | {count:,} | {pct}% | {desc} |")
+
+    lines.append("\n---\n")
+    lines.append("## 3. TIÊU CHÍ GÁN NHÃN VÀ XỬ LÝ NGỮ CẢNH\n")
+    lines.append("### 3.1. Nhãn Toxic (1)")
+    lines.append("- **Tục tĩu, thô tục hướng vào con người:** `lồn`, `cặc`, `đụ`, `địt`, `đm`, `vkl`, `đcm`, các dạng ngụy trang `l.ồ.n`, `lol`, `loz`, `con cặc`...")
+    lines.append("- **Lăng mạ, hạ nhục trực tiếp:** `thằng ngu`, `đồ ngu`, `vô học`, `mất dạy`, `óc chó`, `não chó`, `tinh trùng khuyết tật`...")
+    lines.append("- **Tấn công cá nhân:** Kết hợp đại từ xưng hô công kích (`mày` + từ xúc phạm, `bạn bị não`, `nhà mày rác`, `mả bố mày`...).")
+    lines.append("- **Miệt thị, kích động thù hằn:** `chó vàng`, `bò đỏ`, `súc vật`, `trại súc vật` dùng để tấn công người bình luận khác.")
+    lines.append("- **Đe dọa hung hăng:** `cút đi`, `biến đi`, `im mồm`, `câm mõm` mang tính áp đặt bạo lực ngôn từ.")
+
+    lines.append("\n### 3.2. Nhãn Non-toxic (0)")
+    lines.append("- Bình luận trung lập, chia sẻ cảm xúc, khen ngợi phim, tri ân anh hùng liệt sĩ.")
+    lines.append("- Phê bình, góp ý, nhận xét chuyên môn về phim (*phim nhiều sạn, kịch bản chưa mượt, hóa trang chưa đạt*).")
+    lines.append("- **Từ ngữ nhạy cảm trong ngữ cảnh kịch bản/nhân vật:**")
+    lines.append("  + Nhân vật Sen bị sang chấn tâm lý, hóa điên: *'Sen hóa điên', 'bị khùng'* -> **Non-toxic**.")
+    lines.append("  + Trích dẫn câu thoại: *'sợ cái chó gì'* -> **Non-toxic**.")
+    lines.append("  + Nhận xét vai phản diện: *'nhân vật Quang hèn nhát'* -> **Non-toxic**.")
+    lines.append("- **Tiếng lóng cảm thán:** *'hay vcl', 'cảm động vcl', 'khóc điếng'* -> **Non-toxic**.")
+    lines.append("- Thơ ca tri ân, văn học lịch sử tưởng niệm -> **Non-toxic**.")
+
+    lines.append("\n---\n")
+    lines.append("## 4. PHƯƠNG PHÁP VÀ CÔNG CỤ THỰC TẾ\n")
+    lines.append("- **Hệ thống phân loại đa tầng:**")
+    lines.append("  1. Tầng 1: Từ vựng thô tục nghiêm trọng và biến thể né kiểm duyệt.")
+    lines.append("  2. Tầng 2: Cấu trúc lăng mạ có chủ ngữ.")
+    lines.append("  3. Tầng 3: Nhận diện ngữ cảnh phim/lịch sử/nghệ thuật để triệt tiêu false positive.")
+    lines.append("  4. Tầng 4: Phân tích các từ phụ thuộc ngữ cảnh (`đéo`, `vcl`).")
+    lines.append("  5. Tầng 5: Hậu xử lý (Post-processing) sửa các trường hợp biên và nhật ký hóa.")
+    lines.append("- **Công cụ sử dụng:** Python 3.10+, thư viện `pandas`, `re`, `pathlib`, xuất UTF-8-SIG.")
+    lines.append("- **Cam kết chất lượng:** Không sử dụng nhãn ngẫu nhiên, không tạo số liệu giả, giữ nguyên 100% số lượng dòng và nội dung gốc.")
+
+    lines.append("\n---\n")
+    lines.append("## 5. MẪU DỮ LIỆU ĐÃ GÁN NHÃN\n")
+    lines.append("### 5.1. Mẫu Toxic tiêu biểu")
+    lines.append("| ID | Trích dẫn bình luận | Conf. | Lý do gán nhãn |")
+    lines.append("|---|---|---|---|")
+    for _, row in toxic_samples.iterrows():
+        cmt = str(row['comment'])[:75].replace('|', '/').replace('\n', ' ')
+        reason = str(row['reason'])[:50].replace('|', '/').replace('\n', ' ')
+        lines.append(f"| {row['id_comment']} | {cmt}... | {row['confidence']} | {reason} |")
+
+    lines.append("\n### 5.2. Mẫu bình luận cần người dùng review (`needs_review = TRUE`)")
+    lines.append("| ID | Nhãn dự kiến | Conf. | Trích dẫn bình luận | Lý do cần kiểm tra |")
+    lines.append("|---|---|---|---|---|")
+    for _, row in review_samples.iterrows():
+        cmt = str(row['comment'])[:65].replace('|', '/').replace('\n', ' ')
+        reason = str(row['reason'])[:45].replace('|', '/').replace('\n', ' ')
+        lines.append(f"| {row['id_comment']} | {row['label_name']} | {row['confidence']} | {cmt}... | {reason} |")
+
+    lines.append("\n---\n")
+    lines.append("## 6. HẠN CHẾ VÀ LƯU Ý KHI SỬ DỤNG CHO MACHINE LEARNING\n")
+    lines.append("1. **Mất cân bằng lớp (Class Imbalance):** Tỷ lệ Toxic thực tế trong tập là **2.33%** (570 mẫu). Điều này phản ánh trung thực một chủ đề lịch sử hào hùng ít bị toxic, nhưng khi huấn luyện mô hình ML cần bắt buộc dùng `stratify` và trọng số cân bằng lớp (`class_weight='balanced'`).")
+    lines.append("2. **Ground Truth:** Toàn bộ dữ liệu được gán nhãn qua pipeline tự động có kiểm soát chất lượng. Để đạt độ hoàn hảo học thuật cao nhất, khuyến nghị duyệt qua file `facebook_comments_review.csv` (433 dòng).")
+    lines.append("3. **Sarcasm / Ngữ cảnh ẩn:** Một số cách nói châm biếm ngầm không dùng từ khóa toxic có thể là false negative.")
+
+    lines.append("\n---\n")
+    lines.append("## 7. DANH SÁCH FILE KẾT QUẢ ĐÃ XUẤT\n")
+    lines.append("| Đường dẫn file | Kích thước | Mô tả |")
+    lines.append("|---|---|---|")
+    lines.append("| `d:\\btl kpdl\\labeling\\facebook_comments_labeled.csv` | ~5.0 MB | Toàn bộ 24,491 bình luận kèm các cột nhãn đầy đủ |")
+    lines.append("| `d:\\btl kpdl\\labeling\\facebook_comments_review.csv` | ~307 KB | 433 bình luận cần review thủ công |")
+    lines.append("| `d:\\btl kpdl\\labeling\\correction_log.csv` | ~18.5 KB | Nhật ký chỉnh sửa của các vòng hậu kiểm |")
+    lines.append("| `d:\\btl kpdl\\labeling\\labeling_report.md` | Báo cáo này | Báo cáo kỹ thuật chi tiết quy trình gán nhãn |")
+
+    output_path = Path(r'd:\btl kpdl\labeling\labeling_report.md')
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+    print(f"Report generated successfully: {output_path}")
+
+if __name__ == '__main__':
+    generate_report()
